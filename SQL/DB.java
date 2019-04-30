@@ -1,5 +1,7 @@
 import java.sql.*;
 import java.lang.*;
+import java.util.*;
+
 
 public class JDBC{
 
@@ -9,6 +11,11 @@ public class JDBC{
     public static final String PASSWORD = "R`eqy]N*@R0.";
 
     public static void main(String [] args){
+        Scanner scanner = new Scanner(System.in);
+        System.out.println("Enter your student ID");
+        String sID = scanner.nextLine();
+        System.out.println("username is " + sID + ".");
+
         try {
             Class.forName("com.mysql.cj.jdbc.Driver");
             ConnectionString = "jdbc:mysql://mysql.cs.wwu.edu:3306/" + USER + "?useSSL=false";
@@ -20,7 +27,6 @@ public class JDBC{
                 int ID = result.getInt("ID");
                 System.out.println(ID);
             }
-                //DBTablePrinter.printTable(conn, "takes");
             System.out.println("yes");
             conn.close();
         }catch(Exception e){
