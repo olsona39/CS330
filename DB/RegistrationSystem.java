@@ -57,10 +57,14 @@ public class RegistrationSystem{
                     e.printStackTrace();
                 }
             }
-            if(operation == "Check Degree"){
-
-            }
-            if(operation == "Requirements"){
+//            SELECT DISTINCT C.course_id
+//                    -- C.course_id, T.course_id, S.ID, C.dept_name, C.title
+//            FROM takes AS T, course AS C, student AS S
+//            WHERE S.ID = T.ID
+//            AND C.dept_name = S.dept_name
+//            AND T.course_id != C.course_id
+//            AND S.ID = '12345';
+            if(operation == "Check Degree Requirements") {
 
             }
             if(operation == "Add Course"){
