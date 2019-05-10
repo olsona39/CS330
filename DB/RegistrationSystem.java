@@ -1,6 +1,8 @@
 import java.sql.*;
 import java.lang.*;
 import java.util.*;
+//javac -cp .:mysql-connector-java/mysql-connector-java-8.0.16.jar Main.java
+
 
 public class RegistrationSystem{
 
@@ -30,7 +32,7 @@ public class RegistrationSystem{
         }
         //Prompt user for command
         String operation = "";
-        //while(!operation.equals("Exit")){
+        while(!operation.equals("Exit")){
             System.out.println("Select an operation: Get Transcript, Check Degree Requirements, Add Course, Remove Course, or Exit");
             operation = scanner.nextLine();
             //Use sID to query db to get xcourse number, xcourse title, xsemester, xyear, xgrade, credits of every course student has taken in chronological order.
@@ -44,12 +46,17 @@ public class RegistrationSystem{
             }
             if(operation.equals("Add Course")){
                 System.out.println("adding course.");
-                addCourse(connection, sID);
+                int added = addCourse(connection, sID);
+                if(added == 0){
+                    System.out.println("Course Added");
+                }else{
+                    System.out.println("Failed to Add Course");
+                }
             }
-//            if(operation == "Remove Course"){
-//
-//            }
-       // }
+            if(operation.equals("Remove Course")){
+                removeCourse(connection, sID);
+            }
+        }
 
     }
 
@@ -106,15 +113,83 @@ public class RegistrationSystem{
         }
     }
 
-    //CHECK IF CURRENTLY ENROLLED
-    public static void addCourse(Connection connection, String sID){
+    public static int removeCourse(Connection connection, String sID) {
         Scanner scanner = new Scanner(System.in);
         System.out.println("Which Semester?");
         String semester = scanner.nextLine();
         System.out.println("Which Year?");
         String year = scanner.nextLine();
         int count = 1;
-        boolean permitted = true;
+        try {
+            //all courses being taken by student in chosen Semester & Year
+            String coursesQuery =
+                    "SELECT course_id, sec_id\n" +
+                            "FROM takes\n" +
+                            "WHERE takes.ID = ?\n" +
+                            "AND semester = ?\n" +
+                            "AND year = ?;\n";
+            PreparedStatement pstmtTaken = connection.prepareStatement(coursesQuery);
+            pstmtTaken.setString(1, sID);
+            pstmtTaken.setString(2, semester);
+            pstmtTaken.setString(3, year);
+
+            ResultSet rsTaken = pstmtTaken.executeQuery();
+            ArrayList<String> courseArray = new ArrayList<String>();
+            ArrayList<String> sectionIDArray = new ArrayList<String>();
+            System.out.println(rsTaken);
+
+            if (!rsTaken.isBeforeFirst()) {
+                System.out.println("You are not currently enrolled in any courses.");
+                return 1;
+            }
+            while (rsTaken.next()) {
+                String courseNum = rsTaken.getString("course_id");
+                courseArray.add(courseNum);
+                String sectionId = rsTaken.getString("sec_id");
+                sectionIDArray.add(sectionId);
+                System.out.println("\n" + count + ":\nCourse Number: " + courseNum + "\nSection id:" + sectionId);
+                count++;
+            }
+
+            //check for valid number selection
+            boolean validNumber = false;
+            String courseNum = "";
+            String sectionId = "";
+            while (!validNumber) {
+                System.out.println("Which section would you like to remove?");
+                int courseIndex = scanner.nextInt() - 1;
+                courseNum = courseArray.get(courseIndex);
+                sectionId = sectionIDArray.get(courseIndex);
+                System.out.println(courseNum);
+                System.out.println(sectionId);
+                if (courseIndex + 1 > count || courseIndex + 1 < 1) {
+                    System.out.println("Invalid number");
+                } else {
+                    validNumber = true;
+                }
+            }
+
+            String deleteQuery = "DELETE FROM takes WHERE ID = ? AND course_id = ? AND sec_id = ?;";
+            PreparedStatement pstmtDelete = connection.prepareStatement(deleteQuery);
+            pstmtDelete.setString(1, sID);
+            pstmtDelete.setString(2, courseNum);
+            pstmtDelete.setString(3, sectionId);
+            pstmtDelete.executeUpdate();
+            System.out.println("Course Removed.");
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return 0;
+    }
+
+    //CHECK IF CURRENTLY ENROLLED
+    public static int addCourse(Connection connection, String sID){
+        Scanner scanner = new Scanner(System.in);
+        System.out.println("Which Semester?");
+        String semester = scanner.nextLine();
+        System.out.println("Which Year?");
+        String year = scanner.nextLine();
+        int count = 1;
         try{
             //all available courses given semester and year
             String coursesQuery =
@@ -137,14 +212,26 @@ public class RegistrationSystem{
                 System.out.println("\n" + count + ":\nCourse Number: " + courseNum + "\nSection id:" + sectionId);
                 count++;
             }
-            //TODO: Make sure that the number they type in exists.
+
             //TODO: Check that there are courses available
-            System.out.println("Which section would you like to enroll in?");
-            int courseIndex = scanner.nextInt() - 1;
-            String courseNum = courseArray.get(courseIndex);
-            String sectionId = sectionIDArray.get(courseIndex);
-            System.out.println(courseNum);
-            System.out.println(sectionId);
+
+            //check for valid number selection
+            boolean validNumber = false;
+            String courseNum = "";
+            String sectionId = "";
+            while(!validNumber) {
+                System.out.println("Which section would you like to enroll in?");
+                int courseIndex = scanner.nextInt() - 1;
+                courseNum = courseArray.get(courseIndex);
+                sectionId = sectionIDArray.get(courseIndex);
+                System.out.println(courseNum);
+                System.out.println(sectionId);
+                if (courseIndex + 1 > count || courseIndex + 1 < 1) {
+                    System.out.println("Invalid number");
+                }else{
+                    validNumber = true;
+                }
+            }
 
             //Check that they satisfy prereqs for the course
             //outputs prereqs needed for course choice
@@ -168,30 +255,44 @@ public class RegistrationSystem{
                 ResultSet rsTakenPrerep = pstmtTakenPrereq.executeQuery();
                 if(!rs.next()){
                     System.out.println("You need to take the prereq for this course.");
-                    permitted = false;
+                    return 1;
                 }
             }
-            //TODO check to see if they are enrolled
+            //checks to see if they are enrolled
+            String enrolledQuery = "SELECT course_id\n" +
+                    "FROM takes\n" +
+                    "WHERE takes.course_id = ?\n" +
+                    "AND takes.ID = ?\n" +
+                    "AND takes.semester = ?\n" +
+                    "AND takes.year = ?;";
+            PreparedStatement pstmtEnrolled = connection.prepareStatement(enrolledQuery);
+            pstmtEnrolled.setString(1, courseNum);
+            pstmtEnrolled.setString(2, sID);
+            pstmtEnrolled.setString(3, semester);
+            pstmtEnrolled.setString(4, year);
 
+            ResultSet rsEnrolled = pstmtEnrolled.executeQuery();
+            if(rsEnrolled.next()){
+                System.out.println("You are already enrolled in course.");
+                return 1;
+            }
 
             //INSERT student selection into takes
-            if(permitted){
-                String insertQuery = "insert into takes values(?, ?, ?, ?, ?, null);";
-                PreparedStatement pstmtInsert = connection.prepareStatement(insertQuery);
-                pstmtInsert.setString(1, sID);
-                pstmtInsert.setString(2, courseNum);
-                pstmtInsert.setString(3, sectionId);
-                pstmtInsert.setString(4, semester);
-                pstmtInsert.setString(5, year);
-                System.out.println(pstmtInsert);
-                pstmtInsert.executeUpdate();
-            }
-            scanner.close();
+            String insertQuery = "insert into takes values(?, ?, ?, ?, ?, null);";
+            PreparedStatement pstmtInsert = connection.prepareStatement(insertQuery);
+            pstmtInsert.setString(1, sID);
+            pstmtInsert.setString(2, courseNum);
+            pstmtInsert.setString(3, sectionId);
+            pstmtInsert.setString(4, semester);
+            pstmtInsert.setString(5, year);
+            System.out.println(pstmtInsert);
+            pstmtInsert.executeUpdate();
+            System.out.println("Course Added.");
 
         }catch(SQLException e){
             e.printStackTrace();
         }
-
+        return 0;
     }
     public static Connection getConnection(){
         Connection conn = null;
