@@ -1,18 +1,23 @@
 import java.sql.*;
 import java.lang.*;
 import java.util.*;
-//javac -cp .:mysql-connector-java/mysql-connector-java-8.0.16.jar Main.java
 
+//pass in database user id and password from the command line
+//R`eqy]N*@R0.
 
 public class RegistrationSystem{
 
-    public static String ConnectionString;
+    private static String user;
+    private static String pass;
+    private static String ConnectionString;
     static final String JDBC_DRIVER = "com.mysql.jdbc.Driver";
-    public static final String USER = "olsona39";
-    public static final String PASSWORD = "R`eqy]N*@R0.";
+
+    public static void RegistrationSystem(String user, String pass){
+        this.user = user;
+        this.pass = pass;
+    }
 
     public void run() {
-        String[] commands = new String[] {"Get Transcript", "Check Degree", "Requirements", "Add Course", "Remove Course", "Exit"};
         Scanner scanner = new Scanner(System.in);
         Connection connection = getConnection();
 
@@ -33,19 +38,16 @@ public class RegistrationSystem{
         //Prompt user for command
         String operation = "";
         while(!operation.equals("Exit")){
+            System.out.println(sID);
             System.out.println("Select an operation: Get Transcript, Check Degree Requirements, Add Course, Remove Course, or Exit");
             operation = scanner.nextLine();
-            //Use sID to query db to get xcourse number, xcourse title, xsemester, xyear, xgrade, credits of every course student has taken in chronological order.
             if(operation.equals("Get Transcript")){
-                System.out.println("Getting Transcript");
                 getTranscript(connection, sID);
             }
             if(operation.equals("Check Degree Requirements")) {
-                System.out.println("checking degree requirements");
                 getDegreeRequirements(connection, sID);
             }
             if(operation.equals("Add Course")){
-                System.out.println("adding course.");
                 int added = addCourse(connection, sID);
                 if(added == 0){
                     System.out.println("Course Added");
@@ -54,7 +56,12 @@ public class RegistrationSystem{
                 }
             }
             if(operation.equals("Remove Course")){
-                removeCourse(connection, sID);
+                int removed = removeCourse(connection, sID);
+                if(removed == 0){
+                    System.out.println("Course Removed");
+                }else{
+                    System.out.println("Failed to Remove Course");
+                }
             }
         }
 
@@ -96,7 +103,7 @@ public class RegistrationSystem{
                             "                        AND T.grade != 'F'\n" +
                             "                        AND C.course_id = T.course_id\n" +
                             "                        AND C.dept_name = S.dept_name\n" +
-                            "                        AND S.ID = ?";
+                            "                        AND S.ID = ?);";
 
             PreparedStatement pstmt = connection.prepareStatement(query);
             pstmt.setString(1, sID);
@@ -136,11 +143,10 @@ public class RegistrationSystem{
             ResultSet rsTaken = pstmtTaken.executeQuery();
             ArrayList<String> courseArray = new ArrayList<String>();
             ArrayList<String> sectionIDArray = new ArrayList<String>();
-            System.out.println(rsTaken);
 
             if (!rsTaken.isBeforeFirst()) {
                 System.out.println("You are not currently enrolled in any courses.");
-                return 1;
+                return -1;
             }
             while (rsTaken.next()) {
                 String courseNum = rsTaken.getString("course_id");
@@ -158,13 +164,12 @@ public class RegistrationSystem{
             while (!validNumber) {
                 System.out.println("Which section would you like to remove?");
                 int courseIndex = scanner.nextInt() - 1;
-                courseNum = courseArray.get(courseIndex);
-                sectionId = sectionIDArray.get(courseIndex);
-                System.out.println(courseNum);
-                System.out.println(sectionId);
-                if (courseIndex + 1 > count || courseIndex + 1 < 1) {
+
+                if (courseIndex + 1 >= count || courseIndex + 1 < 1) {
                     System.out.println("Invalid number");
                 } else {
+                    courseNum = courseArray.get(courseIndex);
+                    sectionId = sectionIDArray.get(courseIndex);
                     validNumber = true;
                 }
             }
@@ -176,13 +181,13 @@ public class RegistrationSystem{
             pstmtDelete.setString(3, sectionId);
             pstmtDelete.executeUpdate();
             System.out.println("Course Removed.");
+
         } catch (SQLException e) {
             e.printStackTrace();
         }
         return 0;
     }
 
-    //CHECK IF CURRENTLY ENROLLED
     public static int addCourse(Connection connection, String sID){
         Scanner scanner = new Scanner(System.in);
         System.out.println("Which Semester?");
@@ -213,19 +218,24 @@ public class RegistrationSystem{
                 count++;
             }
 
-            //TODO: Check that there are courses available
+            if(count < 1){
+                System.out.println("No Courses Available To Add.");
+                return -1;
+            }
 
-            //check for valid number selection
             boolean validNumber = false;
             String courseNum = "";
             String sectionId = "";
             while(!validNumber) {
                 System.out.println("Which section would you like to enroll in?");
-                int courseIndex = scanner.nextInt() - 1;
+                int courseIndex = 0;
+                if(scanner.hasNextInt()) {
+                    courseIndex = scanner.nextInt() - 1;
+                }else{
+                    return -1;
+                }
                 courseNum = courseArray.get(courseIndex);
                 sectionId = sectionIDArray.get(courseIndex);
-                System.out.println(courseNum);
-                System.out.println(sectionId);
                 if (courseIndex + 1 > count || courseIndex + 1 < 1) {
                     System.out.println("Invalid number");
                 }else{
@@ -255,7 +265,7 @@ public class RegistrationSystem{
                 ResultSet rsTakenPrerep = pstmtTakenPrereq.executeQuery();
                 if(!rs.next()){
                     System.out.println("You need to take the prereq for this course.");
-                    return 1;
+                    return -1;
                 }
             }
             //checks to see if they are enrolled
@@ -274,7 +284,7 @@ public class RegistrationSystem{
             ResultSet rsEnrolled = pstmtEnrolled.executeQuery();
             if(rsEnrolled.next()){
                 System.out.println("You are already enrolled in course.");
-                return 1;
+                return -1;
             }
 
             //INSERT student selection into takes
@@ -285,9 +295,7 @@ public class RegistrationSystem{
             pstmtInsert.setString(3, sectionId);
             pstmtInsert.setString(4, semester);
             pstmtInsert.setString(5, year);
-            System.out.println(pstmtInsert);
             pstmtInsert.executeUpdate();
-            System.out.println("Course Added.");
 
         }catch(SQLException e){
             e.printStackTrace();
@@ -298,11 +306,10 @@ public class RegistrationSystem{
         Connection conn = null;
         try {
             Class.forName("com.mysql.cj.jdbc.Driver");
-            ConnectionString = "jdbc:mysql://mysql.cs.wwu.edu:3306/" + USER + "?useSSL=false";
-            conn = DriverManager.getConnection(ConnectionString, USER, PASSWORD);
+            ConnectionString = "jdbc:mysql://mysql.cs.wwu.edu:3306/" + user + "?useSSL=false";
+            conn = DriverManager.getConnection(ConnectionString, user, pass);
         }catch(Exception e){
             e.printStackTrace();
-            System.out.println(e);
         }
         return conn;
     }
@@ -323,7 +330,7 @@ public class RegistrationSystem{
                 }
             }
         }catch(Exception e){
-            System.out.println(e);
+            e.printStackTrace();
         }
         return validID;
     }
